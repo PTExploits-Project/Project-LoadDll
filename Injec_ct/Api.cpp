@@ -66,8 +66,7 @@ HANDLE openProc(DWORD dwPid) {
 	return OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, dwPid);
 }
 
-bool injectDll(HANDLE hProc, string szPath, string &sGameStatus) {
-	int teste = 0xC3;
+bool injectDll(HANDLE hProc, string szPath, string& sGameStatus) {
 	if (!PathFileExists(szPath.c_str())) {
 		sGameStatus = "Dll Status -> Caminho nao encontrado!";
 		return false;
@@ -75,28 +74,41 @@ bool injectDll(HANDLE hProc, string szPath, string &sGameStatus) {
 
 	void* pAlloc = VirtualAllocEx(hProc, 0, szPath.length() + 1, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 
-	if (pAlloc > 0) {
-		if (!WriteProcessMemory(hProc, pAlloc, szPath.c_str(), szPath.length() + 1, NULL)) {
-			sGameStatus = "Dll Status -> Falha ao escrever!";
-			return false;
-		}
-
-		LPTHREAD_START_ROUTINE pLoadLibraryA = (LPTHREAD_START_ROUTINE)GetProcAddress(LoadLibraryA("kernel32"), "LoadLibraryA");
-
-		HANDLE hThread = CreateRemoteThread(hProc, 0, 0, pLoadLibraryA, pAlloc, 0, 0);
-
-		if (hThread == NULL) {
-			sGameStatus = "Dll Status -> Falha ao chamar a API!";
-			return false;
-		}
-
-		CloseHandle(hThread);
-		return true;
-	}
-	else
+	if (pAlloc == NULL) {
 		sGameStatus = "Dll Status -> Falha na alocacao de espaco!";
 
-	return false;
+		return false;
+	}
+
+	if (!WriteProcessMemory(hProc, pAlloc, szPath.c_str(), szPath.length() + 1, NULL)) {
+		sGameStatus = "Dll Status -> Falha ao escrever!";
+		//VirtualFreeEx(hProc, pAlloc, 0, MEM_RELEASE);
+
+		return false;
+	}
+
+	LPTHREAD_START_ROUTINE pLoadLibraryA = (LPTHREAD_START_ROUTINE)GetProcAddress(LoadLibraryA("kernel32"), "LoadLibraryA");
+
+	if (pLoadLibraryA == NULL) {
+		sGameStatus = "Dll Status -> Falha ao obter endereco da LoadLibraryA!";
+		//VirtualFreeEx(hProc, pAlloc, 0, MEM_RELEASE);
+
+		return false;
+	}
+
+	HANDLE hThread = CreateRemoteThread(hProc, 0, 0, pLoadLibraryA, pAlloc, 0, 0);
+
+	if (hThread == NULL) {
+		sGameStatus = "Dll Status -> Falha ao chamar a API!";
+		//VirtualFreeEx(hProc, pAlloc, 0, MEM_RELEASE);
+
+		return false;
+	}
+
+	CloseHandle(hThread);
+	//VirtualFreeEx(hProc, pAlloc, 0, MEM_RELEASE);
+
+	return true;
 }
 
 bool unloadDll(HANDLE hProc, string szPath, string& sGameStatus) {

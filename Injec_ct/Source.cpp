@@ -1,5 +1,6 @@
 #include <Windows.h>
 #include <iostream>
+#include <ctime>
 #include "Api.h"
 
 using namespace std;
@@ -12,7 +13,7 @@ int updateTime;
 bool bConsoleUpdate;
 
 char szPath[MAX_PATH];
-char* Dll = (char*)"ZForce.dll";
+char* Dll = (char*)"Dll_BPT.dll";
 
 string sGameStatus;
 
@@ -42,46 +43,47 @@ DWORD GetPid()
 }
 
 void status() {
+	POINT cursorPos;
+	HWND hwnd = NULL, hwndPT = NULL;
+	DWORD dwPid = 0;
+	HANDLE hProc = NULL;
 
 	while (true) {
-		dwPid = GetPid();
+		GetCursorPos(&cursorPos);
 
-		if (dwPid > 0) {
-			if (!bhProc) {
-				hProc = openProc(dwPid);
+		hwnd = WindowFromPoint(cursorPos);
 
-				if (hProc > 0) {
-					sGameStatus = "Game Status -> Permissao concedida!";
-					bConsoleUpdate = true, bhProc = true;
+		if (hwnd != NULL) {
+			hwndPT = FindWindowA(NULL, "Priston Tale");
+
+			if (hwnd != hwndPT)
+				sGameStatus = "Game Status -> Aguardando Priston Tale..";
+			else
+				GetWindowThreadProcessId(hwndPT, &dwPid);
+
+			if (dwPid > 0) {
+				hProc = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);
+
+				if (hProc != NULL) {
+					if (injectDll(hProc, szPath, sGameStatus)) {
+						sGameStatus = "Game Status -> Dll injetada com sucesso!";
+						bConsoleUpdate = true;
+
+						CloseHandle(hProc);
+						Sleep(3000);
+						ExitProcess(0);
+					}
+					else
+						CloseHandle(hProc);
 				}
 				else {
-					sGameStatus = "Game Status -> Permissao negada!";
+					sGameStatus = "Game Status -> Erro ao abrir OpenProcess..";
 					bConsoleUpdate = true;
+
+					ExitThread(0);
 				}
-
-				DWORD dwThreadId = getThreadID(dwPid);
-				hThread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, dwThreadId);
-			}
-			else {
-				SuspendThread(hThread);
-				bool bInject = injectDll(hProc, szPath, sGameStatus);
-
-				if (!bInject)
-					bConsoleUpdate = true;
-				else {
-					sGameStatus = "Game Status -> Dll injetada!";
-					bConsoleUpdate = true;
-				}
-
-				Sleep(5000);
-
-				ResumeThread(hThread);
-				//unloadDll(hProc, "Dll_Client", sGameStatus);
-				ExitProcess(0);
 			}
 		}
-		else
-			sGameStatus = "Game Status -> Aguardando Priston Tale..";
 	}
 }
 
